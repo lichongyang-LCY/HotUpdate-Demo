@@ -7,20 +7,27 @@ let util = require('util');
 let path = process.cwd();
 let fs = require('fs');
 let Base = require('./base');
+require('./public');
+require('./entity/testHost');
 let port = 50111;
 global.Path = path;
 let requireFiles = {
     a: {path: path + "/testFiles/a.js", file: require(path + '/testFiles/a.js').create(), name: "a.js"},
     b: {path: path + "/testFiles/b.js", file: require(path + '/testFiles/b.js').create(), name: "b.js"},
     aa: {path: path + "/testFiles/aa.json", file: require(path + '/testFiles/aa.json'), name: "aa.json"},
-    playerManager: {path: path + "/manager/playerManager.js", file: require(path + '/manager/playerManager.js'), name: "playerManager.js"}
+    playerManager: {
+        path: path + "/manager/playerManager.js",
+        file: require(path + '/manager/playerManager.js'),
+        name: "playerManager.js"
+    }
 };
 
 let Main = function () {
     this.map = {};
-    Base.call(this, requireFiles);
+    // Base.call(this, __filename);
+    global.Public(this, __filename);
 }
-util.inherits(Main, Base);
+// util.inherits(Main, Base);
 module.exports = Main;
 
 let pro = Main.prototype;
@@ -56,14 +63,21 @@ pro.start = function () {
     }).listen(port);
 
     console.log("http Server 启动完成 visit http://127.0.0.1:%s  ... ...", port);
+    console.log("hotUpdate:%j", global.testHost.hotUpdate);
 }
 
 pro.reload = function (fileName, filePath, type) {
     let x;
+    console.log("arguments: %j",arguments)
     switch (type) {
         case "js" :
-            x = requireFiles[fileName].file = require(filePath).create();
-            x.logger();
+            if (!!global[fileName]) {
+                global[fileName] = require(filePath);
+            } else {
+                x = requireFiles[fileName].file = require(filePath).create();
+                x.logger();
+            }
+            console.log("hotUpdate:%j", global.testHost.hotUpdate);
             break;
         case "json":
             x = requireFiles[fileName].file = require(filePath)

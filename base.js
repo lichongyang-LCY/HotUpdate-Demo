@@ -3,43 +3,81 @@
  */
 'use strict';
 let fs = require('fs');
-let Base = function (files) {
-    var self = this;
-    if (!!files) {
-        self.watchFile(files);
+
+let Base = function (filePath, opts) {
+    opts = opts || {self: true, recursion: false, children: false};
+    if (!!filePath) {
+        _watchFile(filePath, opts);
     }
 }
-
 module.exports = Base;
 
-let pro = Base.prototype;
-
-pro.watchFile = function (Files) {
-    var self = this;
-    for (let fileName in Files) {
-        let file = Files[fileName];
-        fs.watchFile(file.path, function () {
-            console.log("reload file[%s] start", file.name);
-            // delete require.cache[require.resolve(file.path)];
-            self.cleanCache(require.resolve(file.path));
-            Files[fileName].file = require[file.path];
-            console.log("reload file[%s] end", file.name);
-            let type = file.name.split('.')[1];
-            self.reload(fileName, file.path, type);
-        });
+let _watchFile = function (filePath, opts) {
+    let module = require.cache[filePath];
+    if (opts.self) {
+        _watch(filePath);
     }
+    if (opts.children) {
+        for (let id in module.children) {
+            let children = module.children[id];
+            if (!!children) {
+                let curFilePath = children.filename;
+                if (__filename === curFilePath)
+                    continue;
+
+                _watch(curFilePath);
+
+                if (opts.recursion)
+                    _watchFile(curFilePath, opts);
+            }
+        }
+    }
+};
+
+let _watch = function (curFilePath) {
+    fs.watch(curFilePath, function (eventType, filename) {
+        console.warn(" eventType[%j] - - - fileName[%j]", eventType, filename);
+        if ('change' !== eventType)
+            return;
+        console.log("reload file[%s] start", filename);
+        let parentName = _cleanCache(require.resolve(curFilePath));
+        let type = filename.split('.')[1];
+        let name = filename.split('.')[0];
+        reload(name, curFilePath, type, parentName);
+        console.log("reload file[%s] end", filename);
+    });
 }
 
-pro.cleanCache = function (modulePath) {
-    console.log("cleanCache");
-    var module = require.cache[modulePath];
+let _cleanCache = function (modulePath) {
+    let module = require.cache[modulePath];
+    let parentName = null;
     // remove reference in module.parent
     if (module.parent) {
+        parentName = module.parent.filename;
         module.parent.children.splice(module.parent.children.indexOf(module), 1);
     }
     require.cache[modulePath] = null;
+    return parentName;
 }
 
-pro.reload = function (fileName, filePath) {
+let reload = function (fileName, filePath, type, parentName) {
+    switch (type) {
+        case "js" :
+            if (!!global[fileName]) {
+                global[fileName] = require(filePath);
+            }
+            break;
+        case "json":
+            loadData(filePath, parentName);
+            break;
+    }
+}
 
+let loadData = function (filePath, parentName) {
+    if (!!parentName) {
+        let object = require(parentName).create();
+        object.reload(filePath);
+    } else {
+        console.log("parent  undefined");
+    }
 }
